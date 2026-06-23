@@ -1,0 +1,1689 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Crumbs Before Christmas</title>
+
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+
+<style>
+  /* ===========================================================
+     PAGE / FRAME  — cozy festive backdrop, pixel-crisp canvas
+     =========================================================== */
+  :root{
+    --ink:#2a1a0c;
+    --night:#1a1228;
+    --night2:#241a36;
+  }
+  *{ box-sizing:border-box; }
+  html,body{
+    margin:0; height:100%; overflow:hidden;
+    background:
+      radial-gradient(120% 90% at 50% -10%, #3a2a52 0%, var(--night2) 45%, var(--night) 100%);
+    font-family: "Courier New", ui-monospace, monospace;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #wrap{
+    position:fixed; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    flex-direction:column;
+  }
+  /* subtle drifting snow on the page behind the frame */
+  #pageSnow{ position:fixed; inset:0; pointer-events:none; opacity:.5; }
+  #frame{
+    position:relative;
+    padding:10px;
+    border-radius:14px;
+    background:linear-gradient(180deg,#5a3a22,#3c2615);
+    box-shadow:0 18px 50px rgba(0,0,0,.55), inset 0 0 0 3px #7a4e2c, inset 0 0 0 6px #2a1a0c;
+  }
+  canvas#game{
+    display:block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    background:#000;
+    border-radius:4px;
+  }
+  #hint{
+    margin-top:10px; color:#f4e3c2; opacity:.75; font-size:12px; letter-spacing:.5px;
+    text-align:center; text-shadow:0 1px 0 #000;
+  }
+  #hint b{ color:#ffd76a; }
+
+  /* ===== MOBILE CONTROLS ===== */
+  #mobileControls {
+    display: none;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 140px;
+    pointer-events: none;
+    z-index: 100;
+  }
+  /* visibility controlled by JS ControlMode — not by media query */
+  @media (pointer: coarse) {
+    #hint { display: none; }
+  }
+
+  /* Joystick container — bottom left */
+  #joystickZone {
+    position: absolute;
+    left: 18px;
+    bottom: 18px;
+    width: 96px;
+    height: 96px;
+    pointer-events: all;
+    touch-action: none;
+    image-rendering: pixelated;
+  }
+  #joystickBase {
+    position: absolute;
+    inset: 0;
+    border-radius: 0;          /* pixel art = square corners */
+    background: transparent;
+  }
+  /* Pixel-art ring drawn as a box-shadow staircase */
+  #joystickRing {
+    position: absolute;
+    inset: 8px;
+    background: rgba(90,58,34,0.45);
+    border: 4px solid rgba(122,78,44,0.7);
+    outline: 4px solid rgba(42,26,12,0.5);
+    image-rendering: pixelated;
+  }
+  /* D-pad arrows (pixel triangles via CSS clip-path) */
+  .dpad-arrow {
+    position: absolute;
+    width: 16px; height: 12px;
+    background: rgba(244,227,194,0.55);
+    clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+  }
+  #dpad-up    { top: 10px; left: 50%; transform: translateX(-50%) rotate(0deg); }
+  #dpad-down  { bottom: 10px; left: 50%; transform: translateX(-50%) rotate(180deg); }
+  #dpad-left  { left: 10px; top: 50%; transform: translateY(-50%) rotate(-90deg); }
+  #dpad-right { right: 10px; top: 50%; transform: translateY(-50%) rotate(90deg); }
+
+  /* Joystick nub */
+  #joystickNub {
+    position: absolute;
+    width: 28px; height: 28px;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: #b06a2e;
+    border: 4px solid #2a1a0c;
+    outline: 2px solid #f2c14e;
+    image-rendering: pixelated;
+    transition: transform 0.05s;
+  }
+  /* pixel cross on nub */
+  #joystickNub::before {
+    content:'';
+    position:absolute;
+    inset: 4px;
+    background:
+      linear-gradient(#c98442,#c98442) center/4px 100% no-repeat,
+      linear-gradient(#c98442,#c98442) center/100% 4px no-repeat;
+  }
+
+  /* Jump button — bottom right */
+  #jumpBtn {
+    position: absolute;
+    right: 24px;
+    bottom: 22px;
+    width: 72px; height: 72px;
+    pointer-events: all;
+    touch-action: none;
+    background: #d8403c;
+    border: 4px solid #2a1a0c;
+    outline: 4px solid #7a1a18;
+    image-rendering: pixelated;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform 0.05s, background 0.05s;
+  }
+  #jumpBtn:active, #jumpBtn.pressed {
+    background: #f2c14e;
+    transform: translate(2px, 2px);
+    outline-color: #a88020;
+  }
+  /* Pixel star icon on jump button */
+  #jumpBtn::before {
+    content: '';
+    position: absolute;
+    inset: 8px;
+    background: #fff3df;
+    clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  }
+  /* "JUMP" pixel label */
+  #jumpBtn::after {
+    content: 'JUMP';
+    position: absolute;
+    bottom: -22px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #f4e3c2;
+    font-family: "Courier New", monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    opacity: 0.7;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+<canvas id="pageSnow"></canvas>
+<div id="wrap">
+  <div id="frame">
+    <canvas id="game" width="384" height="216"></canvas>
+  </div>
+  <div id="hint">
+    Move <b>&larr; &rarr;</b> / <b>A D</b> &nbsp;·&nbsp; Jump <b>Space / W / &uarr;</b> &nbsp;·&nbsp;
+    Pause <b>P</b> &nbsp;·&nbsp; Mute <b>M</b> &nbsp;·&nbsp; <b>Joystick</b> to move &nbsp;·&nbsp; <b>Button</b> to jump
+  </div>
+</div>
+
+<!-- Mobile Controls Overlay -->
+<div id="mobileControls">
+  <div id="joystickZone">
+    <div id="joystickBase">
+      <div id="joystickRing">
+        <div class="dpad-arrow" id="dpad-up"></div>
+        <div class="dpad-arrow" id="dpad-down"></div>
+        <div class="dpad-arrow" id="dpad-left"></div>
+        <div class="dpad-arrow" id="dpad-right"></div>
+      </div>
+    </div>
+    <div id="joystickNub"></div>
+  </div>
+  <div id="jumpBtn"></div>
+</div>
+
+<script>
+"use strict";
+/* ===========================================================================
+   A COZY GINGERBREAD CHRISTMAS
+   Single-file pixel-art platformer. No libraries, no assets, no network.
+
+   SECTIONS
+     1.  Config & small utilities
+     2.  Palette + pixel-art sprite/tile builder (all art drawn in code)
+     3.  Procedural audio engine (Web Audio: SFX + looping chiptune carols)
+     4.  Input (keyboard + touch)
+     5.  Tile rules + level generators (3 hand-built levels)
+     6.  Background pre-render + decorations (garlands, fire, lights, snow)
+     7.  Player entity + platformer physics
+     8.  Game state machine (TITLE / TRANSITION / PLAYING / CUTSCENE / PAUSE)
+     9.  Rendering (world, HUD, screens)
+     10. Main loop (requestAnimationFrame + delta time)
+   =========================================================================== */
+
+/* ============================= 1. CONFIG ================================== */
+const VIEW_W = 384, VIEW_H = 216;     // fixed internal resolution
+const TS = 16;                        // tile size in pixels
+
+const cvs = document.getElementById('game');
+const ctx = cvs.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+// Integer-scale the canvas to the window for crisp, blocky pixels.
+function fitCanvas(){
+  const sx = Math.floor(window.innerWidth  / VIEW_W);
+  const sy = Math.floor((window.innerHeight - 70) / VIEW_H);
+  const scale = Math.max(1, Math.min(sx, sy));
+  cvs.style.width  = (VIEW_W * scale) + 'px';
+  cvs.style.height = (VIEW_H * scale) + 'px';
+}
+window.addEventListener('resize', fitCanvas);
+
+// Physics tuning (pixels, seconds)
+const GRAVITY    = 980;
+const MOVE_MAX   = 86;
+const MOVE_ACCEL = 720;
+const FRICTION   = 760;
+const JUMP_VEL   = 332;     // ~3.4 tiles of clearance
+const JUMP_CUT   = 130;     // velocity cap when jump released early
+const COYOTE     = 0.09;
+const JUMP_BUFF  = 0.10;
+
+const clamp = (v,a,b)=> v<a?a : v>b?b : v;
+const lerp  = (a,b,t)=> a+(b-a)*t;
+const rnd   = (a,b)=> a + Math.random()*(b-a);
+const aabb  = (a,b)=> a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
+
+/* ===================== 2. PALETTE + PIXEL ART ============================= */
+/* Cohesive festive palette: reds, greens, golds, browns, creams. */
+const PAL = {
+  '.':null,
+  // gingerbread + general
+  'd':'#5b3413', 'b':'#b06a2e', 'l':'#c98442', 'w':'#fff3df', 'k':'#241509',
+  'r':'#d8403c', 'g':'#3fa45b', 'm':'#7a3b18', 'p':'#e58fae',
+  // gold / icy
+  'y':'#f2c14e', 'O':'#ffe07a', 'i':'#cfe9ff',
+  // wood
+  'o':'#5e3a1a', 'n':'#7a4a22', 'u':'#9a6330',
+  // stone / brick
+  's':'#a89488', 't':'#6e564c', 'q':'#8a6f64',
+  // foliage
+  'e':'#2f7d43', 'f':'#3fa45b', 'h':'#5cc274',
+  // accents
+  'a':'#a83232', 'z':'#3f6fd0'
+};
+
+// Build a tiny offscreen canvas from rows of palette chars.
+function buildArt(rows){
+  const h = rows.length, w = rows[0].length;
+  const c = document.createElement('canvas'); c.width=w; c.height=h;
+  const x = c.getContext('2d');
+  for(let j=0;j<h;j++){
+    const row = rows[j];
+    for(let i=0;i<w;i++){
+      const col = PAL[row[i]];
+      if(col){ x.fillStyle=col; x.fillRect(i,j,1,1); }
+    }
+  }
+  return c;
+}
+// Horizontally flipped copy (for left-facing sprites).
+function flipArt(src){
+  const c=document.createElement('canvas'); c.width=src.width; c.height=src.height;
+  const x=c.getContext('2d'); x.imageSmoothingEnabled=false;
+  x.translate(src.width,0); x.scale(-1,1); x.drawImage(src,0,0);
+  return c;
+}
+
+/* ---- Gingerbread protagonist: idle / walk x2 / jump, 16x16 ----
+   d=outline  b=body  l=highlight  w=icing  k=eye  m=mouth  p=cheek  r/g=buttons */
+const GB_IDLE = [
+  "......dddd......",
+  ".....dwwwwd.....",
+  "....dwllblwd....",
+  "....dbkbbkbd....",
+  "....dpbbbbpd....",
+  "....dbwmmwbd....",
+  "....ddbbbbdd....",
+  "..ddbbbbbbbbdd..",
+  "ddwwbbbbbbbbwwdd",
+  "dwwbbbrbbgbbbwwd",
+  ".ddbbbbbbbbbbdd.",
+  "...dblbbbbbld...",
+  "...dbbbbbbbbd...",
+  "...dbbddddbbd...",
+  "...dbbd..dbbd...",
+  "..dwwd....dwwd.."
+];
+const GB_WALKA = GB_IDLE.slice(0,13).concat([
+  "...dbbddddbbd...",
+  "...dbbd.dbbd....",
+  "..dwwd...dwwd..."
+]);
+const GB_WALKB = GB_IDLE.slice(0,13).concat([
+  "...dbbddddbbd...",
+  "..dbbd....dbbd..",
+  ".dwwd......dwwd."
+]);
+const GB_JUMP = GB_IDLE.slice(0,13).concat([
+  "...dbbddddbbd...",
+  "...dwbd..dbwd...",
+  "....d......d...."
+]);
+
+const SPR = {};
+SPR.gb_idle_r  = buildArt(GB_IDLE);
+SPR.gb_walka_r = buildArt(GB_WALKA);
+SPR.gb_walkb_r = buildArt(GB_WALKB);
+SPR.gb_jump_r  = buildArt(GB_JUMP);
+SPR.gb_idle_l  = flipArt(SPR.gb_idle_r);
+SPR.gb_walka_l = flipArt(SPR.gb_walka_r);
+SPR.gb_walkb_l = flipArt(SPR.gb_walkb_r);
+SPR.gb_jump_l  = flipArt(SPR.gb_jump_r);
+
+/* ---- Candy-cane collectible, 8x12 ---- */
+SPR.cane = buildArt([
+  "..wwrr..",
+  ".wrrwwr.",
+  ".wr..rw.",
+  ".wr.....",
+  "..rw....",
+  "..wr....",
+  "..rw....",
+  "..wr....",
+  "..rw....",
+  "..wr....",
+  "..rw....",
+  "..rr...."
+]);
+
+/* ---- 5x7 bitmap pixel font (crisp at any integer scale; no font blur) ---- */
+const FONT = {
+  'A':["01110","10001","10001","11111","10001","10001","10001"],
+  'B':["11110","10001","11110","10001","10001","10001","11110"],
+  'C':["01111","10000","10000","10000","10000","10000","01111"],
+  'D':["11110","10001","10001","10001","10001","10001","11110"],
+  'E':["11111","10000","10000","11110","10000","10000","11111"],
+  'F':["11111","10000","10000","11110","10000","10000","10000"],
+  'G':["01111","10000","10000","10011","10001","10001","01111"],
+  'H':["10001","10001","10001","11111","10001","10001","10001"],
+  'I':["11111","00100","00100","00100","00100","00100","11111"],
+  'J':["00111","00010","00010","00010","10010","10010","01100"],
+  'K':["10001","10010","10100","11000","10100","10010","10001"],
+  'L':["10000","10000","10000","10000","10000","10000","11111"],
+  'M':["10001","11011","10101","10101","10001","10001","10001"],
+  'N':["10001","11001","10101","10101","10011","10001","10001"],
+  'O':["01110","10001","10001","10001","10001","10001","01110"],
+  'P':["11110","10001","10001","11110","10000","10000","10000"],
+  'Q':["01110","10001","10001","10001","10101","10010","01101"],
+  'R':["11110","10001","10001","11110","10100","10010","10001"],
+  'S':["01111","10000","10000","01110","00001","00001","11110"],
+  'T':["11111","00100","00100","00100","00100","00100","00100"],
+  'U':["10001","10001","10001","10001","10001","10001","01110"],
+  'V':["10001","10001","10001","10001","10001","01010","00100"],
+  'W':["10001","10001","10001","10101","10101","11011","10001"],
+  'X':["10001","10001","01010","00100","01010","10001","10001"],
+  'Y':["10001","10001","01010","00100","00100","00100","00100"],
+  'Z':["11111","00001","00010","00100","01000","10000","11111"],
+  '0':["01110","10001","10011","10101","11001","10001","01110"],
+  '1':["00100","01100","00100","00100","00100","00100","01110"],
+  '2':["01110","10001","00001","00110","01000","10000","11111"],
+  '3':["11110","00001","00001","01110","00001","00001","11110"],
+  '4':["00010","00110","01010","10010","11111","00010","00010"],
+  '5':["11111","10000","11110","00001","00001","10001","01110"],
+  '6':["01110","10000","10000","11110","10001","10001","01110"],
+  '7':["11111","00001","00010","00100","01000","01000","01000"],
+  '8':["01110","10001","10001","01110","10001","10001","01110"],
+  '9':["01110","10001","10001","01111","00001","00001","01110"],
+  ' ':["00000","00000","00000","00000","00000","00000","00000"],
+  '.':["00000","00000","00000","00000","00000","00000","00100"],
+  ',':["00000","00000","00000","00000","00000","00100","01000"],
+  ':':["00000","00100","00000","00000","00000","00100","00000"],
+  ';':["00000","00100","00000","00000","00100","00100","01000"],
+  '!':["00100","00100","00100","00100","00100","00000","00100"],
+  '?':["01110","10001","00001","00110","00100","00000","00100"],
+  "'":["00100","00100","00000","00000","00000","00000","00000"],
+  '"':["01010","01010","00000","00000","00000","00000","00000"],
+  '-':["00000","00000","00000","11111","00000","00000","00000"],
+  '+':["00000","00100","00100","11111","00100","00100","00000"],
+  '/':["00001","00001","00010","00100","01000","10000","10000"],
+  '(':["00110","01000","10000","10000","10000","01000","00110"],
+  ')':["01100","00010","00001","00001","00001","00010","01100"],
+  '&':["01100","10010","10100","01000","10101","10010","01101"],
+  '%':["11001","11010","00100","01000","10011","00011","00000"]
+};
+FONT['—'] = FONT['-'];   // em dash used in the HUD title
+function fontScale(size){ return size<=10 ? 1 : (size<=16 ? 2 : 3); }
+function textWidth(str, size){ const s=fontScale(size); return str.length*6*s - s; }
+function blitText(str, x, y, color, s){
+  ctx.fillStyle=color;
+  let pen=x;
+  for(const ch of str){
+    const g = FONT[ch] || FONT[ch.toUpperCase()] || FONT[' '];
+    for(let j=0;j<7;j++){ const row=g[j];
+      for(let i=0;i<5;i++){ if(row[i]==='1') ctx.fillRect(pen+i*s, y+j*s, s, s); }
+    }
+    pen += 6*s;
+  }
+}
+
+/* ---- Tiles (16x16). Solids: T,B,X.  One-way: G,L,= ---- */
+const TILE_ART = {
+  // wood plank block (L3 floor / furniture) — bright top surface so it reads clearly
+  'X': buildArt([
+    "llllllllllllllll","ylllllllllllllly","uuuuuuuuuuuuuuuu","unnnnnnnnnnnnnnu",
+    "unnoonnnnnnoonnu","unnnnnnnnnnnnnnu","uoooooooooooooou","unnnnnnnnnnnnnnu",
+    "unnnnnnoonnnnnnu","unnnnnnnnnnnnnnu","uoooooooooooooou","unnnnnnnnnnnnnnu",
+    "unnoonnnnnnoonnu","unnnnnnnnnnnnnnu","uoooooooooooooou","mmmmmmmmmmmmmmmm"
+  ]),
+  // tree trunk / room wall (L1)
+  'T': buildArt([
+    "onononononononon","nonononononononn","ononnonoonnonono","onononononononon",
+    "nononononononono","ononononnonononn","onnonononononono","onononononononon",
+    "nononononononono","ononnonoonnonono","onononononononon","nononononononono",
+    "ononononnonononn","onononononononon","nononononononono","ononononononononn"
+  ]),
+  // snowy pine branch one-way platform (L1) — woody stem + needles + snow on top
+  'G': buildArt([
+    "wwiwiwwiwiwwiwiw","hwfhwfhfwhfwhfwh","fhfhfhfhfhfhfhfh","mfefefmfefefmfef",
+    "efhfefefhfefefhf","e.f.e.f.e.f.e.f.","................","................",
+    "................","................","................","................",
+    "................","................","................","................"
+  ]),
+  // brick / stone (L2 walls, mantel)
+  'B': buildArt([
+    "qqqqqqqqsqqqqqqq","qqqqqqqqtqqqqqqq","qqsqqqqqtqqqqsqq","tttttttttttttttt",
+    "qqqtqqqqqqqtqqqq","sqqtqqqqqqqtqqqs","qqqtqqqqqqqtqqqq","tttttttttttttttt",
+    "qqqqqqqqtqqqqqqq","qqsqqqqqtqqqqqqq","qqqqqqqqtqqqsqqq","tttttttttttttttt",
+    "qqqtqqqqqqqtqqqq","qqqtqqsqqqqtqqqq","qqqtqqqqqqqtqqqq","tttttttttttttttt"
+  ]),
+  // log ledge one-way (L2)
+  'L': buildArt([
+    "uunuuunuuunuuunu","nununununununun","nnnnnnnnnnnnnnnn","oooooooooooooooo",
+    "................","................","................","................",
+    "................","................","................","................",
+    "................","................","................","................"
+  ]),
+  // wood ledge one-way (L3 shelves)
+  '=': buildArt([
+    "uuuuuuuuuuuuuuuu","nununununununun","nnnnnnnnnnnnnnnn","oooooooooooooooo",
+    "................","................","................","................",
+    "................","................","................","................",
+    "................","................","................","................"
+  ])
+};
+
+/* ===================== 3. PROCEDURAL AUDIO ================================ */
+const NOTE = {0:0,
+  'C3':130.81,'D3':146.83,'E3':164.81,'F3':174.61,'G3':196.00,'A3':220.00,'B3':246.94,
+  'C4':261.63,'D4':293.66,'E4':329.63,'F4':349.23,'G4':392.00,'A4':440.00,'B4':493.88,
+  'C5':523.25,'D5':587.33,'E5':659.25,'F5':698.46,'G5':783.99,'A5':880.00,'B5':987.77
+};
+
+// ---- Carols (public-domain), [noteName, beats]. Melody + simple bass. ----
+const SONG_JINGLE = { tempo:160, tracks:[
+  { type:'square', gain:0.16, notes:[
+    ['E4',1],['E4',1],['E4',2], ['E4',1],['E4',1],['E4',2],
+    ['E4',1],['G4',1],['C4',1.5],['D4',.5],['E4',2],['E4',2],
+    ['F4',1],['F4',1],['F4',1.5],['F4',.5], ['F4',1],['E4',1],['E4',1],['E4',.5],['E4',.5],
+    ['E4',1],['D4',1],['D4',1],['E4',1], ['D4',2],['G4',2]
+  ]},
+  { type:'triangle', gain:0.18, notes:[
+    ['C3',2],['G3',2], ['C3',2],['G3',2], ['C3',2],['G3',2],['C3',2],
+    ['F3',4], ['C3',2],['G3',2], ['G3',2],['C3',2]
+  ]}
+]};
+const SONG_DECK = { tempo:150, tracks:[
+  { type:'square', gain:0.16, notes:[
+    ['G4',1.5],['F4',.5],['E4',1],['D4',1], ['C4',1],['D4',1],['E4',1],['C4',1],
+    ['D4',1],['E4',1],['F4',1],['D4',1], ['E4',.5],['F4',.5],['G4',1],['E4',1],['C4',1],
+    ['D4',1],['C4',1],['B3',1],['C4',1], ['G4',1],['G4',1],['C4',2]
+  ]},
+  { type:'triangle', gain:0.18, notes:[
+    ['C3',2],['C3',2], ['C3',2],['G3',2], ['G3',2],['C3',2], ['C3',2],['G3',2],
+    ['G3',2],['C3',2], ['C3',4]
+  ]}
+]};
+const SONG_WISH = { tempo:150, tracks:[
+  { type:'square', gain:0.16, notes:[
+    ['G4',1], ['C5',1],['C5',.5],['D5',.5],['C5',.5],['B4',.5], ['A4',1],['A4',1],['A4',1],
+    ['A4',1], ['D5',1],['D5',.5],['E5',.5],['D5',.5],['C5',.5], ['B4',1],['G4',1],['G4',1],
+    ['G4',1], ['E5',1],['E5',.5],['F5',.5],['E5',.5],['D5',.5], ['C5',1],['A4',1],['G4',.5],['G4',.5],
+    ['A4',1],['D5',1],['B4',1], ['C5',3]
+  ]},
+  { type:'triangle', gain:0.18, notes:[
+    ['C3',3],['F3',3],['G3',3],['C3',3], ['A3',3],['D3',3],['G3',3],['C3',3]
+  ]}
+]};
+
+class AudioEngine{
+  constructor(){
+    this.ctx=null; this.muted=false;
+    this.master=null; this.musicGain=null; this.sfxGain=null;
+    this.song=null; this.tracks=null; this.tempo=120; this.timer=null;
+  }
+  init(){
+    if(this.ctx) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    this.ctx = new AC();
+    this.master = this.ctx.createGain();
+    this.master.gain.value = this.muted ? 0 : 0.9;
+    this.master.connect(this.ctx.destination);
+    this.musicGain = this.ctx.createGain(); this.musicGain.gain.value=0.9; this.musicGain.connect(this.master);
+    this.sfxGain   = this.ctx.createGain(); this.sfxGain.gain.value=0.6;  this.sfxGain.connect(this.master);
+  }
+  resume(){ if(this.ctx && this.ctx.state==='suspended') this.ctx.resume(); }
+  toggleMute(){ this.setMuted(!this.muted); return this.muted; }
+  setMuted(m){ this.muted=m; if(this.master) this.master.gain.value = m?0:0.9; }
+
+  // ---- one-shot tone with envelope (for SFX) ----
+  tone(freq,dur,type='square',vol=0.4,slideTo=null,dest=null){
+    if(!this.ctx) return;
+    const t=this.ctx.currentTime;
+    const o=this.ctx.createOscillator(); o.type=type;
+    o.frequency.setValueAtTime(freq,t);
+    if(slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(1,slideTo), t+dur);
+    const g=this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.linearRampToValueAtTime(vol,t+0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g); g.connect(dest||this.sfxGain);
+    o.start(t); o.stop(t+dur+0.03);
+  }
+  // ---- designed sound effects ----
+  sfxJump(){  this.tone(380,0.16,'square',0.32,760); }
+  sfxLand(){  this.tone(170,0.07,'square',0.26,90); }
+  sfxStep(){  this.tone(120,0.05,'triangle',0.07,80); }
+  sfxStart(){ this.tone(520,0.07,'square',0.3); setTimeout(()=>this.tone(784,0.12,'square',0.3),70); }
+  sfxCollect(){ this.tone(880,0.07,'triangle',0.34); setTimeout(()=>this.tone(1320,0.12,'triangle',0.34),55); }
+  sfxComplete(){ ['C5','E5','G5','C5'].forEach((n,i)=> setTimeout(()=> this.tone(NOTE[n]*(i===3?2:1),0.18,'triangle',0.34), i*110)); }
+  sfxSparkle(){ const f=rnd(1200,2200); this.tone(f,0.10,'triangle',0.22,f*1.6); }
+
+  // ---- looping chiptune scheduler (lookahead on the audio clock) ----
+  playSong(song){
+    if(!this.ctx) return;
+    this.stopMusic();
+    this.song=song; this.tempo=song.tempo;
+    const start = this.ctx.currentTime + 0.12;
+    this.tracks = song.tracks.map(tr=>{
+      const starts=[]; let acc=0;
+      for(const n of tr.notes){ starts.push(acc); acc+=n[1]; }
+      return { notes:tr.notes, starts, len:acc, type:tr.type, gain:tr.gain, i:0, base:start };
+    });
+    this.timer = setInterval(()=>this._schedule(), 25);
+    this._schedule();
+  }
+  stopMusic(){ if(this.timer){ clearInterval(this.timer); this.timer=null; } this.song=null; this.tracks=null; }
+  _schedule(){
+    if(!this.ctx || !this.tracks) return;
+    const beat = 60/this.tempo;
+    const ahead = this.ctx.currentTime + 0.18;
+    for(const tr of this.tracks){
+      while(true){
+        const when = tr.base + tr.starts[tr.i]*beat;
+        if(when >= ahead) break;
+        const [name,b] = tr.notes[tr.i];
+        const f = NOTE[name]||0;
+        if(f>0) this._musicNote(f, when, b*beat*0.86, tr.type, tr.gain);
+        tr.i++;
+        if(tr.i >= tr.notes.length){ tr.i=0; tr.base += tr.len*beat; }
+      }
+    }
+  }
+  _musicNote(freq,when,dur,type,gain){
+    const o=this.ctx.createOscillator(); o.type=type; o.frequency.value=freq;
+    const g=this.ctx.createGain();
+    g.gain.setValueAtTime(0.0001,when);
+    g.gain.linearRampToValueAtTime(gain,when+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,when+dur);
+    o.connect(g); g.connect(this.musicGain);
+    o.start(when); o.stop(when+dur+0.03);
+  }
+}
+const AUDIO = new AudioEngine();
+
+/* ===================== CONTROL MODE ====================================== */
+// Tracks whether touch controls (joystick + jump button) are visible.
+// Default: touch devices start in touch mode, everything else in keyboard mode.
+const ControlMode = {
+  touch: window.matchMedia('(pointer: coarse)').matches,
+
+  toggle(){ this.touch = !this.touch; this._apply(); },
+
+  _apply(){
+    const overlay = document.getElementById('mobileControls');
+    if(overlay) overlay.style.display = this.touch ? 'block' : 'none';
+  },
+
+  // The on-canvas button rect (in game-canvas coords). Set by drawTitle each frame.
+  btnX: 6, btnY: 6, btnW: 110, btnH: 22,
+
+  // Convert a clientX/Y to canvas coords and check if inside the button.
+  hitTest(clientX, clientY){
+    if(!_titleVisible) return false;
+    const r = document.getElementById('game').getBoundingClientRect();
+    const scaleX = VIEW_W / r.width;
+    const scaleY = VIEW_H / r.height;
+    const cx = (clientX - r.left) * scaleX;
+    const cy = (clientY - r.top)  * scaleY;
+    return cx >= this.btnX && cx <= this.btnX + this.btnW &&
+           cy >= this.btnY && cy <= this.btnY + this.btnH;
+  }
+};
+let _titleVisible = false;   // set true while title screen is shown
+
+/* ===================== 4. INPUT (keyboard + touch) ======================= */
+const Input = {
+  left:false, right:false, jumpHeld:false,
+  jumpQueued:0,   // jump-buffer timer
+  pausePressed:false, anyPressed:false,
+  _firstInteraction(){ AUDIO.init(); AUDIO.resume(); }
+};
+function setJump(down){
+  if(down && !Input.jumpHeld) Input.jumpQueued = JUMP_BUFF;
+  Input.jumpHeld = down;
+}
+window.addEventListener('keydown', e=>{
+  const k=e.key.toLowerCase();
+  if(['arrowleft','arrowright','arrowup','arrowdown',' ','w','a','s','d','p','escape','m','c'].includes(k)) e.preventDefault();
+  Input._firstInteraction();
+  if(k==='arrowleft'||k==='a') Input.left=true;
+  if(k==='arrowright'||k==='d') Input.right=true;
+  if(k===' '||k==='w'||k==='arrowup'){ if(!e.repeat){ setJump(true); Input.anyPressed=true; } }
+  if(k==='p'||k==='escape'){ if(!e.repeat) Input.pausePressed=true; }
+  if(k==='m'){ if(!e.repeat){ const m=AUDIO.toggleMute(); Game.muteFlash=1; } }
+  if(k==='c'){ if(!e.repeat && _titleVisible) ControlMode.toggle(); return; }  // toggle only; don't set anyPressed
+  if(!e.repeat) Input.anyPressed=true;
+},{passive:false});
+window.addEventListener('keyup', e=>{
+  const k=e.key.toLowerCase();
+  if(k==='arrowleft'||k==='a') Input.left=false;
+  if(k==='arrowright'||k==='d') Input.right=false;
+  if(k===' '||k==='w'||k==='arrowup') setJump(false);
+});
+
+// ===================== MOBILE JOYSTICK + JUMP BUTTON =====================
+(function setupMobileControls(){
+  const joystickZone = document.getElementById('joystickZone');
+  const joystickNub  = document.getElementById('joystickNub');
+  const jumpBtn      = document.getElementById('jumpBtn');
+
+  const DEAD = 10;    // dead-zone radius in px
+  const MAX  = 36;    // max nub travel radius in px
+
+  let joystickTouchId = null;
+  let joystickOriginX = 0, joystickOriginY = 0;
+  let jumpTouchId     = null;
+
+  function getJoyCenter(){
+    const r = joystickZone.getBoundingClientRect();
+    return { x: r.left + r.width/2, y: r.top + r.height/2 };
+  }
+
+  function updateNub(dx, dy){
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    const clamped = Math.min(dist, MAX);
+    const nx = dist > 0 ? (dx / dist) * clamped : 0;
+    const ny = dist > 0 ? (dy / dist) * clamped : 0;
+    joystickNub.style.transform = `translate(calc(-50% + ${nx}px), calc(-50% + ${ny}px))`;
+    // Update directional inputs
+    Input.left  = dx < -DEAD;
+    Input.right = dx >  DEAD;
+  }
+
+  function resetNub(){
+    joystickNub.style.transform = 'translate(-50%, -50%)';
+    Input.left  = false;
+    Input.right = false;
+  }
+
+  // Joystick touch events
+  joystickZone.addEventListener('touchstart', e=>{
+    Input._firstInteraction(); Input.anyPressed=true;
+    if(joystickTouchId === null){
+      const t = e.changedTouches[0];
+      joystickTouchId = t.identifier;
+      const c = getJoyCenter();
+      joystickOriginX = c.x;
+      joystickOriginY = c.y;
+      updateNub(t.clientX - joystickOriginX, t.clientY - joystickOriginY);
+    }
+    e.preventDefault();
+  },{passive:false});
+
+  joystickZone.addEventListener('touchmove', e=>{
+    for(const t of e.changedTouches){
+      if(t.identifier === joystickTouchId){
+        updateNub(t.clientX - joystickOriginX, t.clientY - joystickOriginY);
+      }
+    }
+    e.preventDefault();
+  },{passive:false});
+
+  joystickZone.addEventListener('touchend', e=>{
+    for(const t of e.changedTouches){
+      if(t.identifier === joystickTouchId){
+        joystickTouchId = null;
+        resetNub();
+      }
+    }
+    e.preventDefault();
+  },{passive:false});
+
+  joystickZone.addEventListener('touchcancel', e=>{
+    joystickTouchId = null;
+    resetNub();
+    e.preventDefault();
+  },{passive:false});
+
+  // Jump button touch events
+  jumpBtn.addEventListener('touchstart', e=>{
+    Input._firstInteraction(); Input.anyPressed=true;
+    if(jumpTouchId === null){
+      jumpTouchId = e.changedTouches[0].identifier;
+      setJump(true);
+      jumpBtn.classList.add('pressed');
+    }
+    e.preventDefault();
+  },{passive:false});
+
+  jumpBtn.addEventListener('touchend', e=>{
+    for(const t of e.changedTouches){
+      if(t.identifier === jumpTouchId){
+        jumpTouchId = null;
+        setJump(false);
+        jumpBtn.classList.remove('pressed');
+      }
+    }
+    e.preventDefault();
+  },{passive:false});
+
+  jumpBtn.addEventListener('touchcancel', e=>{
+    jumpTouchId = null;
+    setJump(false);
+    jumpBtn.classList.remove('pressed');
+    e.preventDefault();
+  },{passive:false});
+
+  // Canvas tap is handled by the global touchstart listener below.
+})();
+
+// also a plain click counts as "any pressed" for screens
+// BUT if it hits the toggle button, toggle instead of starting the game.
+cvs.addEventListener('mousedown', e=>{
+  Input._firstInteraction();
+  if(ControlMode.hitTest(e.clientX, e.clientY)){ ControlMode.toggle(); return; }
+  Input.anyPressed=true;
+});
+cvs.addEventListener('touchstart', e=>{
+  Input._firstInteraction();
+  const t = e.changedTouches[0];
+  if(ControlMode.hitTest(t.clientX, t.clientY)){ ControlMode.toggle(); e.preventDefault(); return; }
+  Input.anyPressed=true;
+  e.preventDefault();
+},{passive:false});
+
+/* ===================== 5. TILE RULES + LEVELS ============================= */
+const isSolid  = ch => ch==='T'||ch==='B'||ch==='X';
+const isOneway = ch => ch==='G'||ch==='L'||ch==='=';
+
+function makeGrid(cols,rows,fill){ const g=[]; for(let y=0;y<rows;y++) g.push(new Array(cols).fill(fill)); return g; }
+
+// ---------------- LEVEL 1 — "Top the Tree" (vertical) ----------------
+function makeLevel1(){
+  const cols=24, rows=40;
+  const g=makeGrid(cols,rows,'.');
+  for(let y=0;y<rows;y++){ g[y][0]='T'; g[y][cols-1]='T'; }      // room walls
+  for(let x=0;x<cols;x++){ g[rows-1][x]='T'; g[rows-2][x]='T'; } // floor
+
+  // branch platforms (one-way) sprouting from the trunk, alternating sides
+  const branchYs=[];
+  let side=0, bi=0;
+  const lens=[8,6,9,7,8,6,9,7,8,6];           // varied branch lengths for a natural look
+  for(let y=rows-5; y>=8; y-=3){
+    const len=lens[bi%lens.length];
+    let x0,x1;
+    if(side){ x0=13; x1=Math.min(cols-2, 13+len); }   // right branch off the trunk
+    else    { x0=Math.max(2, 12-len); x1=12; }         // left branch off the trunk
+    for(let x=x0;x<x1;x++) g[y][x]='G';
+    branchYs.push({y,x0,x1});
+    side^=1; bi++;
+  }
+  for(let x=9;x<15;x++) g[5][x]='G';        // crown platform for the star
+
+  const spawn={x:3*TS, y:(rows-4)*TS};
+  const goal ={type:'star', zone:{x:9*TS,y:2*TS,w:6*TS,h:3*TS}, cx:12*TS, cy:3*TS, done:false, t:0};
+
+  const collectibles=[];
+  [2,4,6].forEach(idx=>{ const br=branchYs[idx]; if(br){ const cx=((br.x0+br.x1)/2|0); collectibles.push({x:cx*TS+4,y:(br.y-1)*TS+2,w:8,h:12,got:false}); }});
+
+  return finalizeLevel({cols,rows,grid:g,spawn,goal,collectibles,
+    name:'LEVEL 1', title:'Top the Tree', objective:'Climb the tree and place the star!',
+    song:SONG_JINGLE, theme:'tree', camFollow:'y'});
+}
+
+// ---------------- LEVEL 2 — "Hang the Stocking" (vertical) ----------------
+function makeLevel2(){
+  const cols=24, rows=34;
+  const g=makeGrid(cols,rows,'.');
+  for(let y=0;y<rows;y++){ g[y][0]='B'; g[y][cols-1]='B'; }
+  for(let x=0;x<cols;x++){ g[rows-1][x]='B'; g[rows-2][x]='B'; }
+
+  let side=0; const ledgeYs=[];
+  for(let y=rows-5; y>=8; y-=3){
+    const x0 = side? 11 : 2;
+    const x1 = side? 22 : 13;
+    for(let x=x0;x<x1;x++) g[y][x]='L';
+    ledgeYs.push({y,x0,x1});
+    side^=1;
+  }
+  for(let x=6;x<18;x++) g[5][x]='B';        // the mantel
+
+  const spawn={x:3*TS, y:(rows-4)*TS};
+  const goal ={type:'stocking', zone:{x:9*TS,y:2*TS,w:6*TS,h:3*TS}, cx:12*TS, cy:5*TS, done:false, t:0};
+
+  const collectibles=[];
+  [1,3,5].forEach(idx=>{ const le=ledgeYs[idx]; if(le){ const cx=((le.x0+le.x1)/2|0); collectibles.push({x:cx*TS+4,y:(le.y-1)*TS+2,w:8,h:12,got:false}); }});
+
+  return finalizeLevel({cols,rows,grid:g,spawn,goal,collectibles,
+    name:'LEVEL 2', title:'Hang the Stocking', objective:'Climb the fireplace and hang the stocking!',
+    song:SONG_DECK, theme:'fire', camFollow:'y'});
+}
+
+// ---------------- LEVEL 3 — "Light It Up" (horizontal) ----------------
+function makeLevel3(){
+  const cols=60, rows=14;
+  const g=makeGrid(cols,rows,'.');
+  const fy=12;                              // floor rows 12,13
+  // floor with a few 2-wide gaps
+  const gap=(x)=> (x>=11&&x<=12)||(x>=22&&x<=23)||(x>=37&&x<=38);
+  for(let x=0;x<cols;x++){ if(!gap(x)){ g[fy][x]='X'; g[fy+1][x]='X'; } }
+  g[rows-1][0]='X'; // safety
+  // low furniture bumps to hop over
+  for(let x=15;x<=16;x++){ g[10][x]='X'; g[11][x]='X'; }   // a chest
+  for(let x=30;x<=31;x++){ g[10][x]='X'; g[11][x]='X'; }   // a stool
+  // a couple of floating shelves for variety / to help cross gaps
+  for(let x=24;x<=27;x++) g[9][x]='=';
+  for(let x=40;x<=43;x++) g[8][x]='=';
+  // stairs up to the window at the right
+  for(let x=49;x<=50;x++){ for(let y=10;y<=11;y++) g[y][x]='X'; }
+  for(let x=52;x<=53;x++){ for(let y=8;y<=11;y++) g[y][x]='X'; }
+  for(let x=55;x<=58;x++) g[6][x]='=';      // the window ledge
+
+  const spawn={x:2*TS, y:(fy-2)*TS};
+  const goal ={type:'lights', zone:{x:55*TS,y:3*TS,w:5*TS,h:3*TS}, cx:56*TS, cy:5*TS, done:false, t:0};
+
+  const collectibles=[
+    {x:7*TS+4,  y:(fy-2)*TS+2, w:8,h:12,got:false},
+    {x:25*TS+4, y:8*TS+2,      w:8,h:12,got:false},
+    {x:34*TS+4, y:(fy-2)*TS+2, w:8,h:12,got:false},
+    {x:41*TS+4, y:7*TS+2,      w:8,h:12,got:false}
+  ];
+
+  return finalizeLevel({cols,rows,grid:g,spawn,goal,collectibles,
+    name:'LEVEL 3', title:'Light It Up', objective:'Reach the window and plug in the lights!',
+    song:SONG_WISH, theme:'room', camFollow:'x'});
+}
+
+/* ===================== 6. BACKGROUND PRE-RENDER + DECOR =================== */
+function finalizeLevel(L){
+  L.pxW = L.cols*TS; L.pxH = L.rows*TS;
+  L.totalTreats = L.collectibles.length;
+  L.bg = prerenderBackground(L);
+  return L;
+}
+
+// Wallpaper helper: solid base + tiny repeating motif.
+function wallpaper(x, base, motif, mc){
+  const w=arguments[5], h=arguments[6];
+  x.fillStyle=base; x.fillRect(0,0,w,h);
+  x.fillStyle=mc;
+  for(let yy=4; yy<h; yy+=18){
+    for(let xx=(((yy/18)|0)%2)*9; xx<w; xx+=18){
+      // little diamond motif
+      x.fillRect(xx,yy,2,2); x.fillRect(xx-1,yy+1,1,1); x.fillRect(xx+2,yy+1,1,1);
+      x.fillRect(xx,yy+2,2,1);
+    }
+  }
+}
+function star5(x, cx, cy, r, col){
+  x.fillStyle=col; x.beginPath();
+  for(let i=0;i<10;i++){ const ang=-Math.PI/2 + i*Math.PI/5; const rr=(i%2)?r*0.42:r;
+    const px=cx+Math.cos(ang)*rr, py=cy+Math.sin(ang)*rr; i?x.lineTo(px,py):x.moveTo(px,py); }
+  x.closePath(); x.fill();
+}
+
+/* Layered conifer: many overlapping tiers, narrow at the top, wide at the base.
+   apex sits exactly at topY; the lowest tier base sits at baseY. */
+function coneTree(x, cx, topY, baseY, hwBot, colA, colB){
+  const span  = Math.max(8, baseY - topY);
+  const tiers = Math.max(3, Math.round(span/30));
+  const step  = span / (tiers - 1 + 1.85);   // vertical advance per tier
+  const triH  = step * 1.85;                  // tier height > step => tiers overlap
+  for(let k=tiers-1; k>=0; k--){              // draw bottom first so upper tiers overlay
+    const t  = tiers>1 ? k/(tiers-1) : 0;     // 0 at top, 1 at bottom
+    const by = baseY - (tiers-1-k)*step;      // this tier's base line
+    const hw = lerp(hwBot*0.16, hwBot, t);    // narrow at top -> wide at bottom
+    x.fillStyle = (k%2) ? colB : colA;
+    x.beginPath(); x.moveTo(cx, by-triH); x.lineTo(cx-hw, by); x.lineTo(cx+hw, by); x.closePath(); x.fill();
+  }
+}
+// approximate silhouette half-width at a given y (for scattering ornaments)
+function treeHalfWidthAt(y, topY, baseY, hwBot){
+  const t=clamp((y-topY)/Math.max(1,baseY-topY),0,1); return lerp(hwBot*0.16, hwBot, t)*0.82;
+}
+
+function prerenderBackground(L){
+  const c=document.createElement('canvas'); c.width=L.pxW; c.height=L.pxH;
+  const x=c.getContext('2d'); x.imageSmoothingEnabled=false;
+  const W=L.pxW, H=L.pxH;
+
+  if(L.theme==='tree'){
+    wallpaper(x,'#3a2230','#4a2c3d', '#52334a', 0,0,W,H);
+    // skirting / floor band
+    x.fillStyle='#4a2c14'; x.fillRect(0,H-16,W,16);
+    // the big decorated tree behind the branch platforms
+    const baseY=H-22, topY=40, cxT=W/2;
+    coneTree(x, cxT, topY, baseY, 150, '#2f7d43', '#2c6e3c');
+    // ornaments scattered within the tree silhouette
+    const oc=['#d8403c','#f2c14e','#3f6fd0','#fff3df','#e58fae'];
+    for(let i=0;i<54;i++){
+      const oy = topY + 16 + Math.random()*(baseY-topY-22);
+      const hw = treeHalfWidthAt(oy, topY, baseY, 150);
+      const ox = cxT + (Math.random()*2-1)*hw;
+      x.fillStyle=oc[i%oc.length]; x.fillRect(ox|0, oy|0, 3, 3);
+    }
+    // trunk + pot
+    x.fillStyle='#5e3a1a'; x.fillRect(cxT-4, baseY, 8, 10);
+    x.fillStyle='#7a4a22'; x.fillRect(cxT-22, baseY+2, 44, 18);
+    // garland swag at the very top of the room
+    drawGarland(x, 0, 26, W, '#2f7d43', true);
+    // a snowy window on the upper-left wall
+    drawWindow(x, 24, 50, 56, 46);
+  }
+  else if(L.theme==='fire'){
+    // cozy stone wall
+    x.fillStyle='#3a2c28'; x.fillRect(0,0,W,H);
+    wallpaper(x,'#3a2c28','#46342f','#4e3a34',0,0,W,H);
+    // big hearth surround drawn behind brick tiles (just shading for depth)
+    x.fillStyle='#241b18'; x.fillRect(2*TS, H-7*TS, W-4*TS, 7*TS);
+    // fireback (dark) behind the fire at the bottom-center
+    x.fillStyle='#120b09'; x.fillRect(6*TS, H-6*TS, 12*TS, 4*TS);
+    // mantel shadow + candles handled in front layer; garland on mantel:
+    drawGarland(x, 4*TS, 5*TS, 14*TS, '#2f7d43', false, 4*TS);
+    drawWindow(x, W-86, 40, 56, 46);
+  }
+  else { // 'room'  (horizontal living room)
+    // warm cream wall with wainscoting + wood floor band
+    x.fillStyle='#caa97e'; x.fillRect(0,0,W,H);
+    wallpaper(x,'#caa97e','#bd9a6b','#b9956a',0,0,W,Math.floor(H*0.55));
+    x.fillStyle='#9c6b3a'; x.fillRect(0,Math.floor(H*0.55),W,5);          // chair rail
+    x.fillStyle='#46301c'; x.fillRect(0,Math.floor(H*0.55)+5,W,H);        // darker wainscot so floor pops
+    // a long garland draped across the wall
+    drawGarland(x, 0, 24, W, '#2f7d43', true);
+    // framed window near the right where the lights will go
+    drawWindow(x, 53*TS, 1*TS, 6*TS, 5*TS);
+    // a few wall pictures / wreaths for coziness
+    for(const wx of [8*TS,18*TS,33*TS,46*TS]){ drawWreath(x, wx, 40); }
+    // a soft rug hint on the floor
+    x.fillStyle='#8a2f2f'; x.fillRect(3*TS, H-10, 8*TS, 6);
+  }
+  return c;
+}
+
+function drawGarland(x, gx, gy, gw, col, swag, mantelY){
+  const segs=24, amp=swag?8:4;
+  for(let i=0;i<=segs;i++){
+    const t=i/segs, px=gx+t*gw;
+    const py=gy + Math.sin(t*Math.PI* (swag?3:1))*amp + (swag?0:0);
+    x.fillStyle=col; x.fillRect(px|0,py|0,3,3);
+    if(i%3===0){ x.fillStyle=['#d8403c','#f2c14e','#3f6fd0'][i%3? (i%2?0:1):2]; x.fillRect((px+1)|0,(py+3)|0,2,2); }
+  }
+}
+function drawWindow(x, wx, wy, ww, wh){
+  x.fillStyle='#3a2614'; x.fillRect(wx-3,wy-3,ww+6,wh+6);   // frame
+  x.fillStyle='#22406a'; x.fillRect(wx,wy,ww,wh);           // night sky
+  // stars + moon
+  x.fillStyle='#f2eac0'; x.fillRect(wx+ww-14,wy+8,6,6);
+  for(let i=0;i<10;i++){ x.fillStyle='#cfe9ff'; x.fillRect(wx+((i*13)%ww),wy+((i*7)%wh),1,1); }
+  // muntins
+  x.fillStyle='#3a2614'; x.fillRect(wx+ww/2-1,wy,2,wh); x.fillRect(wx,wy+wh/2-1,ww,2);
+  // snow on the sill
+  x.fillStyle='#eef6ff'; x.fillRect(wx-3,wy+wh,ww+6,4);
+}
+function drawWreath(x, cx, cy){
+  for(let a=0;a<Math.PI*2;a+=0.5){ x.fillStyle='#2f7d43'; x.fillRect((cx+Math.cos(a)*9)|0,(cy+Math.sin(a)*9)|0,3,3); }
+  x.fillStyle='#d8403c'; x.fillRect(cx-1,cy+8,3,4); // bow
+}
+
+/* ---- animated FRONT decorations + goal visuals, drawn per frame ---- */
+function drawFront(L, x, time, cam){
+  // collectibles
+  for(const cz of L.collectibles){ if(!cz.got){
+    const bob=Math.sin(time*4 + cz.x)*1.5;
+    x.drawImage(SPR.cane, (cz.x-cam.x)|0, (cz.y-cam.y+bob)|0);
+  }}
+
+  if(L.theme==='fire'){
+    // dancing fire in the hearth at bottom-center
+    const fx=8*TS, fyB=L.pxH-2*TS;
+    for(let i=0;i<14;i++){
+      const fl = Math.sin(time*8 + i)*3;
+      const h  = 16 + Math.sin(time*10+i*1.7)*8;
+      const px = fx + i*8;
+      x.fillStyle = i%2?'#f2a23c':'#f2c14e';
+      x.fillRect((px-cam.x)|0,(fyB-h-cam.y)|0,5,h);
+      x.fillStyle='#d8403c';
+      x.fillRect((px-cam.x)|0,(fyB-h*0.6+fl-cam.y)|0,5,(h*0.6)|0);
+    }
+    x.fillStyle='#3a1f0e'; x.fillRect((6*TS-cam.x)|0,(fyB-cam.y)|0,12*TS,2*TS); // logs base
+    // candles on the mantel
+    for(const cxp of [7*TS, 16*TS]){
+      x.fillStyle='#fff3df'; x.fillRect((cxp-cam.x)|0,(4*TS+6-cam.y)|0,4,12);
+      const fl=Math.sin(time*12+cxp)*1;
+      x.fillStyle='#f2c14e'; x.fillRect((cxp+1-cam.x)|0,(4*TS+2+fl-cam.y)|0,2,5);
+      x.fillStyle='#fff3df'; x.fillRect((cxp+1-cam.x)|0,(4*TS+2+fl-cam.y)|0,2,2);
+    }
+  }
+
+  // ---- GOAL visuals ----
+  const G=L.goal;
+  if(L.theme==='tree'){
+    // star socket / glowing star at the treetop
+    const cx=G.cx-cam.x, cy=G.cy-cam.y;
+    if(G.done){
+      const tw = 1 + Math.sin(time*8)*0.15;
+      x.save(); x.globalAlpha=0.35; star5(x, cx, cy, 16*tw, '#ffe07a'); x.restore();
+      star5(x, cx, cy, 11, '#f2c14e'); star5(x, cx, cy, 7, '#ffe07a');
+      // sparkles
+      for(let i=0;i<4;i++){ const a=time*3+i*1.57; x.fillStyle='#fff3df';
+        x.fillRect((cx+Math.cos(a)*16)|0,(cy+Math.sin(a)*16)|0,2,2); }
+    } else {
+      star5(x, cx, cy, 11, '#6e564c');   // dim socket
+      x.fillStyle='#4a3a32'; x.fillRect((cx-2)|0,(cy-2)|0,4,4);
+    }
+  }
+  else if(L.theme==='fire'){
+    // stocking + hook on the mantel
+    const cx=G.cx-cam.x, cy=G.cy-cam.y;
+    x.fillStyle='#9a6330'; x.fillRect((cx-1)|0,(cy-10)|0,2,6); // hook
+    if(G.done){
+      x.fillStyle='#fff3df'; x.fillRect((cx-7)|0,(cy-4)|0,15,4);     // cuff
+      x.fillStyle='#a83232'; x.fillRect((cx-6)|0,(cy)|0,13,12);      // body
+      x.fillRect((cx-6)|0,(cy+12)|0,17,5);                            // toe
+      x.fillStyle='#fff3df'; x.fillRect((cx+8)|0,(cy+12)|0,3,5);
+      // candy peeking out
+      x.fillStyle='#d8403c'; x.fillRect((cx-2)|0,(cy-9)|0,2,5);
+    } else {
+      x.fillStyle='#6e564c'; x.fillRect((cx-1)|0,(cy-2)|0,2,2);      // empty hook nub
+    }
+  }
+  else {
+    // string of multicolor lights along the window ledge
+    const baseX=53*TS, baseY=3*TS;
+    const bulbCols=['#d8403c','#3fa45b','#f2c14e','#3f6fd0','#e58fae'];
+    x.strokeStyle='#244018'; x.lineWidth=1; x.beginPath();
+    for(let i=0;i<=7;i++){ const px=baseX+i*12 - cam.x, py=baseY+Math.sin(i)*3 - cam.y + Math.sin(i*1.3)*2; i?x.lineTo(px,py):x.moveTo(px,py);} x.stroke();
+    for(let i=0;i<8;i++){
+      const px=baseX+i*12 - cam.x, py=baseY+Math.sin(i)*3 - cam.y + Math.sin(i*1.3)*2 + 3;
+      if(G.done){
+        const on = Math.sin(time*5 + i*0.9) > -0.2;
+        x.fillStyle = on ? bulbCols[i%bulbCols.length] : '#3a3a3a';
+        x.fillRect(px|0,py|0,3,4);
+        if(on){ AUDIO; x.fillStyle='#ffffff'; x.fillRect(px|0,py|0,1,1); }
+      } else {
+        x.fillStyle='#4a4a4a'; x.fillRect(px|0,py|0,3,4);
+      }
+    }
+    // the wall socket / plug at the ledge
+    const sx=G.cx-cam.x, sy=G.cy-cam.y;
+    x.fillStyle = G.done? '#f2c14e' : '#6e564c';
+    x.fillRect(sx|0,sy|0,6,5);
+  }
+}
+
+/* ===================== 7. PLAYER + PHYSICS =============================== */
+const player = {
+  x:0,y:0, w:10,h:14, vx:0,vy:0,
+  grounded:false, facing:1, coyote:0, animT:0, walkFrame:0,
+  squash:0
+};
+function resetPlayer(L){
+  player.x=L.spawn.x; player.y=L.spawn.y; player.vx=0; player.vy=0;
+  player.grounded=false; player.facing=1; player.coyote=0; player.squash=0;
+}
+
+function physics(L, dt){
+  const dir = (Input.right?1:0) - (Input.left?1:0);
+  if(dir!==0){
+    player.vx += dir*MOVE_ACCEL*dt;
+    player.vx = clamp(player.vx, -MOVE_MAX, MOVE_MAX);
+    player.facing = dir;
+  } else {
+    // friction
+    const f=FRICTION*dt;
+    if(player.vx> f) player.vx-=f; else if(player.vx<-f) player.vx+=f; else player.vx=0;
+  }
+
+  // jump buffering + coyote time
+  if(Input.jumpQueued>0) Input.jumpQueued-=dt;
+  const canJump = player.grounded || player.coyote>0;
+  if(Input.jumpQueued>0 && canJump){
+    player.vy=-JUMP_VEL; player.grounded=false; player.coyote=0; Input.jumpQueued=0;
+    player.squash=-1; AUDIO.sfxJump();
+  }
+  // variable jump height
+  if(!Input.jumpHeld && player.vy < -JUMP_CUT) player.vy = -JUMP_CUT;
+
+  // gravity
+  player.vy += GRAVITY*dt; player.vy = clamp(player.vy, -600, 560);
+
+  const wasGrounded = player.grounded;
+  player.grounded=false;
+
+  // ---- horizontal move + solid collision ----
+  player.x += player.vx*dt;
+  let l=player.x, r=player.x+player.w, t=player.y, b=player.y+player.h;
+  const tyTop=Math.floor(t/TS), tyBot=Math.floor((b-1)/TS);
+  if(player.vx>0){
+    const tx=Math.floor((r-1)/TS);
+    for(let ty=tyTop;ty<=tyBot;ty++){ if(tx>=L.cols || isSolid(tileAt(L,tx,ty))){ player.x=tx*TS-player.w; player.vx=0; break; } }
+  } else if(player.vx<0){
+    const tx=Math.floor(l/TS);
+    for(let ty=tyTop;ty<=tyBot;ty++){ if(tx<0 || isSolid(tileAt(L,tx,ty))){ player.x=(tx+1)*TS; player.vx=0; break; } }
+  }
+
+  // ---- vertical move + solid/one-way collision ----
+  const prevBottom = player.y+player.h;
+  player.y += player.vy*dt;
+  let landImpact = 0;                 // downward speed at the moment of landing
+  l=player.x; r=player.x+player.w; t=player.y; b=player.y+player.h;
+  const txL=Math.floor(l/TS), txR=Math.floor((r-1)/TS);
+  if(player.vy>=0){
+    // Moving down OR resting. Check the tile row the feet sit in (use b, not b-1)
+    // so a player at rest re-locks to the floor every frame instead of sinking
+    // ~1px and snapping back, which used to cause jitter + a repeating land sound.
+    const ty=Math.floor(b/TS);
+    for(let tx=txL;tx<=txR;tx++){
+      const ch=tileAt(L,tx,ty);
+      if(isSolid(ch)){ landImpact=player.vy; player.y=ty*TS-player.h; player.vy=0; player.grounded=true; break; }
+      if(isOneway(ch)){ const top=ty*TS; if(prevBottom<=top+1 && b>top){ landImpact=player.vy; player.y=top-player.h; player.vy=0; player.grounded=true; break; } }
+    }
+  } else {
+    const ty=Math.floor(t/TS);
+    for(let tx=txL;tx<=txR;tx++){ if(isSolid(tileAt(L,tx,ty))){ player.y=(ty+1)*TS; player.vy=0; break; } }
+  }
+
+  // coyote + landing feedback — only a *real* landing (meaningful impact) chirps,
+  // so resting on the ground never re-triggers the sound.
+  if(player.grounded){ player.coyote=COYOTE; if(!wasGrounded && landImpact>50){ AUDIO.sfxLand(); player.squash=1; } }
+  else player.coyote=Math.max(0,player.coyote-dt);
+
+  // walk animation + footsteps
+  player.animT+=dt;
+  if(player.grounded && Math.abs(player.vx)>6){
+    if(player.animT>0.12){ player.animT=0; player.walkFrame^=1; if(player.walkFrame===0) AUDIO.sfxStep(); }
+  }
+  player.squash = lerp(player.squash, 0, Math.min(1, dt*10));
+
+  // fell out of the world → respawn at level start
+  if(player.y > L.pxH + 48){ resetPlayer(L); Game.respawnFlash=0.5; }
+
+  // collect treats
+  const pbox={x:player.x,y:player.y,w:player.w,h:player.h};
+  for(const cz of L.collectibles){ if(!cz.got && aabb(pbox,cz)){ cz.got=true; Game.treats++; Game.treatsTotal++; AUDIO.sfxCollect(); Game.popText('+1 treat', player.x, player.y-6); } }
+
+  // reach goal
+  if(!L.goal.done && aabb(pbox, L.goal.zone)){ triggerGoal(L); }
+}
+function tileAt(L,cx,cy){
+  if(cx<0||cx>=L.cols||cy<0||cy>=L.rows) return ' ';
+  return L.grid[cy][cx];
+}
+
+function spriteForPlayer(){
+  const f=player.facing<0?'_l':'_r';
+  if(!player.grounded) return SPR['gb_jump'+f];
+  if(Math.abs(player.vx)>6) return SPR['gb_walk'+(player.walkFrame?'b':'a')+f];
+  return SPR['gb_idle'+f];
+}
+
+/* ===================== 8. GAME STATE MACHINE ============================= */
+const STATE = { TITLE:'title', INTRO:'intro', TRANSITION:'transition', PLAYING:'playing', CUTSCENE:'cutscene' };
+const Game = {
+  state:STATE.TITLE,
+  level:null, levelIndex:0,
+  builders:[makeLevel1, makeLevel2, makeLevel3],
+  cam:{x:0,y:0},
+  time:0,
+  transTimer:0, nextIndex:0,
+  levelDone:false, levelDoneTimer:0,
+  paused:false,
+  treats:0, treatsTotal:0, treatsMax:0,
+  muteFlash:0, respawnFlash:0,
+  pops:[],     // floating "+1 treat" texts
+  snow:[],     // ambient snow for screens/cutscene
+  titleHop:0,
+  cutPhase:0, cutTimer:0,
+
+  popText(txt,x,y){ this.pops.push({txt,x,y,t:0}); },
+
+  startGame(){
+    this.treats=0; this.treatsTotal=0; this.treatsMax=0; this.toIntro();
+  },
+  toIntro(){
+    this.state=STATE.INTRO; this.cutTimer=0; this.titleHop=0;
+    Input.anyPressed=false;   // require a deliberate press to begin
+    AUDIO.playSong(SONG_JINGLE);
+    this.spawnScreenSnow(60);
+  },
+  toTransition(idx){
+    this.nextIndex=idx; this.state=STATE.TRANSITION; this.transTimer=2.0;
+    AUDIO.stopMusic();
+  },
+  startLevel(idx){
+    this.levelIndex=idx;
+    this.level=this.builders[idx]();
+    this.treats=0;                 // treats are counted per level (e.g. 0/3 each room)
+    this.treatsMax += this.level.totalTreats;   // running total of all treats available
+    resetPlayer(this.level);
+    this.cam.x=0; this.cam.y=0;
+    this.levelDone=false; this.levelDoneTimer=0;
+    this.state=STATE.PLAYING;
+    AUDIO.playSong(this.level.song);
+  },
+  toCutscene(){
+    this.state=STATE.CUTSCENE; this.cutPhase=0; this.cutTimer=0; this.titleHop=0;
+    Input.anyPressed=false;   // wait for a deliberate press before returning to menu
+    AUDIO.playSong(SONG_WISH);
+    this.spawnScreenSnow(70);
+  },
+  backToTitle(){
+    this.state=STATE.TITLE; AUDIO.stopMusic(); this.spawnScreenSnow(60);
+    _titleVisible = true;
+  },
+  spawnScreenSnow(n){
+    this.snow=[]; for(let i=0;i<n;i++) this.snow.push({x:rnd(0,VIEW_W),y:rnd(-VIEW_H,VIEW_H),s:rnd(8,22),r:rnd(1,2),drift:rnd(-6,6)});
+  }
+};
+Game.spawnScreenSnow(60);
+
+function triggerGoal(L){
+  L.goal.done=true;
+  Game.levelDone=true; Game.levelDoneTimer=1.8;
+  AUDIO.sfxComplete();
+  if(L.theme==='room'){ for(let i=0;i<6;i++) setTimeout(()=>AUDIO.sfxSparkle(), i*120); }
+}
+
+function updateCamera(L){
+  const tx = player.x + player.w/2 - VIEW_W/2;
+  const ty = player.y + player.h/2 - VIEW_H/2;
+  const cx = clamp(tx, 0, Math.max(0, L.pxW-VIEW_W));
+  const cy = clamp(ty, 0, Math.max(0, L.pxH-VIEW_H));
+  // smooth follow
+  Game.cam.x = Math.round(lerp(Game.cam.x, cx, 0.18));
+  Game.cam.y = Math.round(lerp(Game.cam.y, cy, 0.18));
+}
+
+function update(dt){
+  Game.time += dt;
+  Game.muteFlash=Math.max(0,Game.muteFlash-dt);
+  Game.respawnFlash=Math.max(0,Game.respawnFlash-dt);
+  // advance pops + ambient snow always
+  for(const p of Game.pops) p.t+=dt;
+  Game.pops=Game.pops.filter(p=>p.t<1);
+  for(const s of Game.snow){ s.y+=s.s*dt; s.x+=Math.sin(Game.time+s.y*0.05)*s.drift*dt;
+    if(s.y>VIEW_H+4){ s.y=-4; s.x=rnd(0,VIEW_W);} }
+
+  if(Game.state===STATE.TITLE){
+    Game.titleHop+=dt;
+    if(Input.anyPressed){ Input.anyPressed=false; AUDIO.init(); AUDIO.resume(); AUDIO.sfxStart(); _titleVisible=false; Game.startGame(); }
+    return;
+  }
+
+  if(Game.state===STATE.INTRO){
+    Game.cutTimer+=dt; Game.titleHop+=dt;
+    if(Input.anyPressed && Game.cutTimer>0.8){ Input.anyPressed=false; Game.toTransition(0); }
+    return;
+  }
+
+  if(Game.state===STATE.TRANSITION){
+    Game.transTimer-=dt;
+    if(Game.transTimer<=0) Game.startLevel(Game.nextIndex);
+    return;
+  }
+
+  if(Game.state===STATE.CUTSCENE){
+    Game.cutTimer+=dt; Game.titleHop+=dt;
+    for(let i=0;i<1;i++) if(Math.random()<dt*4) AUDIO.sfxSparkle();
+    if(Input.anyPressed && Game.cutTimer>1.2){ Input.anyPressed=false; Game.backToTitle(); }
+    return;
+  }
+
+  // ---- PLAYING ----
+  // pause toggle
+  if(Input.pausePressed){ Input.pausePressed=false; Game.paused=!Game.paused; }
+  if(Game.paused){ return; }
+
+  const L=Game.level;
+  if(!Game.levelDone){
+    physics(L, dt);
+  } else {
+    // little success pause, then advance
+    Game.levelDoneTimer-=dt;
+    // keep a gentle idle physics so gravity settles the player
+    player.vx=0; physics(L, dt);
+    if(Game.levelDoneTimer<=0){
+      if(Game.levelIndex<2) Game.toTransition(Game.levelIndex+1);
+      else Game.toCutscene();
+    }
+  }
+  updateCamera(L);
+}
+
+/* ===================== 9. RENDERING ===================================== */
+function px(n){ return n|0; }
+
+function drawWorld(L){
+  const cam=Game.cam;
+  // background (blit visible window)
+  ctx.drawImage(L.bg, cam.x, cam.y, VIEW_W, VIEW_H, 0,0, VIEW_W, VIEW_H);
+
+  // tiles (only the visible range)
+  const x0=Math.floor(cam.x/TS), x1=Math.ceil((cam.x+VIEW_W)/TS);
+  const y0=Math.floor(cam.y/TS), y1=Math.ceil((cam.y+VIEW_H)/TS);
+  for(let ty=y0;ty<=y1;ty++) for(let tx=x0;tx<=x1;tx++){
+    const ch=tileAt(L,tx,ty); const art=TILE_ART[ch];
+    if(art) ctx.drawImage(art, tx*TS-cam.x, ty*TS-cam.y);
+  }
+
+  // animated front decor + goal
+  drawFront(L, ctx, Game.time, cam);
+
+  // player (with squash/stretch)
+  const spr=spriteForPlayer();
+  const sx = px(player.x + player.w/2 - 8 - cam.x);
+  const sy = px(player.y + player.h - 16 - cam.y);
+  if(player.squash!==0){
+    const sq=player.squash;
+    const scaleY = 1 - sq*0.18, scaleX = 1 + sq*0.14;
+    const cw=16*scaleX, chh=16*scaleY;
+    ctx.drawImage(spr, sx + (16-cw)/2, sy + (16-chh), cw, chh);
+  } else {
+    ctx.drawImage(spr, sx, sy);
+  }
+
+  // floating treat pops
+  for(const p of Game.pops){
+    ctx.globalAlpha=1-p.t;
+    drawText(p.txt, px(p.x-cam.x-10), px(p.y-cam.y - p.t*10), '#ffe07a', 7);
+    ctx.globalAlpha=1;
+  }
+
+  drawHUD(L);
+  if(Game.respawnFlash>0){ ctx.fillStyle='rgba(255,255,255,'+(Game.respawnFlash*0.6)+')'; ctx.fillRect(0,0,VIEW_W,VIEW_H); }
+}
+
+function drawText(str, x, y, color, size){
+  str = String(str).toUpperCase();
+  const s = fontScale(size||9);
+  x = Math.round(x); y = Math.round(y);
+  blitText(str, x+s, y+s, 'rgba(0,0,0,0.55)', s);  // drop shadow
+  blitText(str, x,   y,   color, s);
+}
+function drawTextC(str, cx, y, color, size){
+  str = String(str).toUpperCase();
+  const w = textWidth(str, size||9);
+  drawText(str, Math.round(cx - w/2), y, color, size);
+}
+
+function drawHUD(L){
+  // top bar
+  ctx.fillStyle='rgba(20,12,30,0.55)'; ctx.fillRect(0,0,VIEW_W,24);
+  drawText(L.name+' — '+L.title, 6, 4, '#ffd76a', 9);
+  drawText(L.objective, 6, 14, '#f4e3c2', 7);
+  // treats counter
+  ctx.drawImage(SPR.cane, VIEW_W-58, 5);
+  drawText(Game.treats+'/'+L.totalTreats, VIEW_W-46, 8, '#fff3df', 9);
+  // mute icon
+  drawMute(VIEW_W-20, 6);
+}
+function totalTreatsAll(){ return Game.level.totalTreats; }
+function drawMute(x,y){
+  ctx.fillStyle = AUDIO.muted ? '#a83232' : '#3fa45b';
+  ctx.fillRect(x,y+3,4,6); ctx.beginPath();
+  ctx.moveTo(x+4,y+3); ctx.lineTo(x+9,y); ctx.lineTo(x+9,y+12); ctx.lineTo(x+4,y+9); ctx.closePath(); ctx.fill();
+  if(AUDIO.muted){ ctx.strokeStyle='#a83232'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(x+11,y+1); ctx.lineTo(x+15,y+11); ctx.stroke(); }
+  else { ctx.strokeStyle='#3fa45b'; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(x+9,y+6,4,-0.7,0.7); ctx.stroke(); }
+  if(Game.muteFlash>0){ drawText(AUDIO.muted?'MUTED':'SOUND ON', x-50, y+14, '#fff3df', 7); }
+}
+
+function drawScreenSnow(){
+  for(const s of Game.snow){ ctx.fillStyle='rgba(255,255,255,'+(0.5+s.r*0.2)+')'; ctx.fillRect(px(s.x),px(s.y),s.r,s.r); }
+}
+
+function drawTitle(){
+  // cozy night gradient
+  const g=ctx.createLinearGradient(0,0,0,VIEW_H);
+  g.addColorStop(0,'#2a1b3e'); g.addColorStop(1,'#16102a');
+  ctx.fillStyle=g; ctx.fillRect(0,0,VIEW_W,VIEW_H);
+  drawScreenSnow();
+
+  // a little decorated scene: tree + gingerbread on a snowy floor
+  ctx.fillStyle='#eef6ff'; ctx.fillRect(0,VIEW_H-26,VIEW_W,26);
+  // mini tree (small tiers at top, wide at the base)
+  const tx=VIEW_W*0.74, baseY=VIEW_H-26, topY=baseY-78;
+  coneTree(ctx, tx, topY, baseY, 40, '#2f7d43', '#2c6e3c');
+  ctx.fillStyle='#5e3a1a'; ctx.fillRect(tx-3, baseY, 6, 6);   // trunk
+  star5(ctx, tx, topY, 8, '#ffe07a');
+  const oc=['#d8403c','#f2c14e','#3f6fd0','#fff3df'];
+  for(let i=0;i<10;i++){ const oy=topY+12+Math.random()*(baseY-topY-16); const hw=treeHalfWidthAt(oy,topY,baseY,40);
+    ctx.fillStyle=oc[i%oc.length]; ctx.fillRect((tx+(Math.random()*2-1)*hw)|0, oy|0, 3,3); }
+  // gingerbread waving (hop)
+  const hop=Math.abs(Math.sin(Game.titleHop*2))*5;
+  ctx.save(); ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(SPR.gb_idle_r, VIEW_W*0.30-16, VIEW_H-42-hop, 32,32);
+  ctx.restore();
+
+  // title text
+  drawTextC('CRUMBS', VIEW_W/2, 34, '#ffd76a', 22);
+  drawTextC('BEFORE', VIEW_W/2, 62, '#fff3df', 22);
+  drawTextC('CHRISTMAS', VIEW_W/2, 90, '#d8403c', 18);
+  // blinking prompt
+  if(Math.floor(Game.time*2)%2===0) drawTextC('Press SPACE / tap to start', VIEW_W/2, 128, '#bfe3ff', 9);
+  drawTextC('Top the tree, hang the stocking, light it up!', VIEW_W/2, 146, '#caa97e', 7);
+  drawTextC('Move: Arrows / A D     Jump: Space / W / Up     Toggle: C', VIEW_W/2, 160, '#9a8a78', 7);
+
+  // ── ON-CANVAS CONTROL TOGGLE BUTTON (top-left) ──────────────────────────
+  const isTouchOn = ControlMode.touch;
+  const BX=6, BY=6, BW=112, BH=22;
+  // store hit region for click/touch detection
+  ControlMode.btnX=BX; ControlMode.btnY=BY; ControlMode.btnW=BW; ControlMode.btnH=BH;
+
+  // outer shadow / depth (pixel art bevel)
+  ctx.fillStyle='#0d0a14';
+  ctx.fillRect(BX+2, BY+2, BW, BH);
+
+  // button body — green when touch ON, dark brown when OFF
+  ctx.fillStyle = isTouchOn ? '#1e6b38' : '#3c2615';
+  ctx.fillRect(BX, BY, BW, BH);
+
+  // top/left highlight edge
+  ctx.fillStyle = isTouchOn ? '#3fa45b' : '#7a4a22';
+  ctx.fillRect(BX, BY, BW, 2);
+  ctx.fillRect(BX, BY, 2, BH);
+
+  // bottom/right shadow edge
+  ctx.fillStyle = isTouchOn ? '#154d28' : '#1c0e08';
+  ctx.fillRect(BX, BY+BH-2, BW, 2);
+  ctx.fillRect(BX+BW-2, BY, 2, BH);
+
+  // status pip (filled = ON, hollow = OFF)
+  const pipX = BX+7, pipY = BY+7, pipS = 8;
+  ctx.fillStyle = isTouchOn ? '#3fa45b' : '#0d0a14';
+  ctx.fillRect(pipX, pipY, pipS, pipS);
+  ctx.fillStyle = isTouchOn ? '#5cc274' : '#5e3a1a';
+  ctx.fillRect(pipX+1, pipY+1, pipS-2, pipS-2);
+  if(isTouchOn){
+    // small checkmark pixels
+    ctx.fillStyle='#fff3df';
+    ctx.fillRect(pipX+1,pipY+4,2,2); ctx.fillRect(pipX+3,pipY+6,2,2); ctx.fillRect(pipX+5,pipY+2,2,4);
+  } else {
+    // small X pixels
+    ctx.fillStyle='#7a3b18';
+    ctx.fillRect(pipX+2,pipY+2,2,2); ctx.fillRect(pipX+4,pipY+4,2,2);
+    ctx.fillRect(pipX+4,pipY+2,2,2); ctx.fillRect(pipX+2,pipY+4,2,2);
+  }
+
+  // label text
+  const labelCol = isTouchOn ? '#a8f0c0' : '#9a8a78';
+  blitText('TOUCH', BX+18, BY+5, labelCol, 1);
+  blitText(isTouchOn ? 'ON ' : 'OFF', BX+18, BY+14, isTouchOn ? '#5cc274' : '#d8403c', 1);
+
+  // "C" key hint
+  blitText('[C]', BX+BW-22, BY+8, '#7a6a58', 1);
+}
+
+function drawTransition(){
+  ctx.fillStyle='#16102a'; ctx.fillRect(0,0,VIEW_W,VIEW_H);
+  drawScreenSnow();
+  const idx=Game.nextIndex;
+  const names=['LEVEL 1','LEVEL 2','LEVEL 3'];
+  const titles=['Top the Tree','Hang the Stocking','Light It Up'];
+  const objs=['Climb the tree and place the star.','Climb the fireplace and hang the stocking.','Reach the window and plug in the lights.'];
+  // fade card
+  const a = clamp(1 - Math.abs(Game.transTimer-1.0), 0, 1);
+  ctx.globalAlpha=a;
+  drawTextC(names[idx], VIEW_W/2, 76, '#ffd76a', 12);
+  drawTextC(titles[idx], VIEW_W/2, 94, '#fff3df', 22);
+  drawTextC(objs[idx], VIEW_W/2, 124, '#caa97e', 8);
+  // a little walking gingerbread
+  const f=Math.floor(Game.time*8)%2?SPR.gb_walka_r:SPR.gb_walkb_r;
+  ctx.drawImage(f, VIEW_W/2-8, 140);
+  ctx.globalAlpha=1;
+}
+
+function drawIntro(){
+  // dusk room — nothing decorated yet
+  const g=ctx.createLinearGradient(0,0,0,VIEW_H);
+  g.addColorStop(0,'#2c2336'); g.addColorStop(1,'#1c1726');
+  ctx.fillStyle=g; ctx.fillRect(0,0,VIEW_W,VIEW_H);
+
+  // floor + rug
+  ctx.fillStyle='#5e3a1a'; ctx.fillRect(0,VIEW_H-30,VIEW_W,30);
+  ctx.fillStyle='#7a2f2f'; ctx.fillRect(VIEW_W/2-60,VIEW_H-22,120,10);
+
+  // fireplace (center-left) with bare hooks — no stockings
+  const fx=70, fy=VIEW_H-30;
+  ctx.fillStyle='#6e564c'; ctx.fillRect(fx-30,fy-70,60,70);
+  ctx.fillStyle='#241b18'; ctx.fillRect(fx-20,fy-40,40,40);
+  ctx.fillStyle='#5e3a1a'; ctx.fillRect(fx-38,fy-74,76,8);      // mantel
+  for(let i=0;i<7;i++){ const h=9+Math.sin(Game.time*8+i)*4; ctx.fillStyle=i%2?'#f2c14e':'#f2a23c';
+    ctx.fillRect(fx-18+i*5, fy-13-h, 4, h); }                   // a small fire
+  ctx.strokeStyle='#caa97e'; ctx.lineWidth=1.5;
+  for(const hx of [fx-14, fx, fx+14]){ ctx.beginPath(); ctx.moveTo(hx,fy-74); ctx.lineTo(hx,fy-69); ctx.arc(hx+2,fy-69,2,Math.PI,0,true); ctx.stroke(); }
+
+  // tree (right) with an UNLIT star and no lights
+  const tx=300, ty=VIEW_H-32, treeTop=ty-122;
+  coneTree(ctx, tx, treeTop, ty, 64, '#2c5e36', '#26512f');     // un-lit, slightly darker greens
+  ctx.fillStyle='#5e3a1a'; ctx.fillRect(tx-4, ty, 8, 8);
+  star5(ctx, tx, treeTop, 11, '#544d60');                       // dim star, no glow
+  star5(ctx, tx, treeTop, 6,  '#6b6480');
+
+  // dull, unplugged string of lights along the top
+  ctx.strokeStyle='#2a3326'; ctx.lineWidth=1; ctx.beginPath();
+  for(let i=0;i<=24;i++){ const lx=i*(VIEW_W/24), ly=18+Math.sin(i*0.6)*6; i?ctx.lineTo(lx,ly):ctx.moveTo(lx,ly);} ctx.stroke();
+  for(let i=0;i<=24;i++){ const lx=i*(VIEW_W/24), ly=18+Math.sin(i*0.6)*6+5; ctx.fillStyle='#454250'; ctx.fillRect(lx-1,ly,3,4); }
+  // the plug, dangling next to a wall socket it isn't in
+  const ey=18+Math.sin(24*0.6)*6+9;
+  ctx.fillStyle='#241b2a'; ctx.fillRect(VIEW_W-22, ey-1, 4,7);                     // wall socket
+  ctx.fillStyle='#0d0a14'; ctx.fillRect(VIEW_W-21, ey, 1,2); ctx.fillRect(VIEW_W-21, ey+3,1,2);
+  ctx.fillStyle='#caa97e'; ctx.fillRect(VIEW_W-12, ey, 6,5);                       // plug body
+  ctx.fillStyle='#8a8170'; ctx.fillRect(VIEW_W-6, ey+1,3,1); ctx.fillRect(VIEW_W-6, ey+3,3,1); // prongs
+
+  // gingerbread sizing up the job, eager little hop
+  const hop=Math.abs(Math.sin(Game.titleHop*2))*4;
+  ctx.save(); ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(SPR.gb_idle_r, VIEW_W/2-16, VIEW_H-56-hop, 32,32);
+  ctx.restore();
+
+  drawScreenSnow();
+
+  // narration
+  drawTextC('Santa is arriving soon!', VIEW_W/2, 42, '#ffd76a', 12);
+  drawTextC('But the house is not ready...', VIEW_W/2, 64, '#fff3df', 8);
+  drawTextC('The star is dark, the stockings are down,', VIEW_W/2, 80, '#caa97e', 7);
+  drawTextC('and the lights are not plugged in.', VIEW_W/2, 90, '#caa97e', 7);
+  drawTextC('Help the gingerbread decorate it all!', VIEW_W/2, 104, '#bfe3ff', 8);
+  if(Game.cutTimer>0.8 && Math.floor(Game.time*2)%2===0) drawTextC('Press any key to begin', VIEW_W/2, VIEW_H-14, '#bfe3ff', 9);
+}
+
+function drawCutscene(){
+  // the finished, fully-decorated room
+  const g=ctx.createLinearGradient(0,0,0,VIEW_H);
+  g.addColorStop(0,'#3a2a52'); g.addColorStop(1,'#241a36');
+  ctx.fillStyle=g; ctx.fillRect(0,0,VIEW_W,VIEW_H);
+  // floor
+  ctx.fillStyle='#7a4a22'; ctx.fillRect(0,VIEW_H-30,VIEW_W,30);
+  ctx.fillStyle='#8a2f2f'; ctx.fillRect(VIEW_W/2-60,VIEW_H-22,120,10); // rug
+
+  // fireplace (center-left) with hung stocking
+  const fx=70, fy=VIEW_H-30;
+  ctx.fillStyle='#6e564c'; ctx.fillRect(fx-30,fy-70,60,70);
+  ctx.fillStyle='#241b18'; ctx.fillRect(fx-20,fy-40,40,40);
+  // mantel
+  ctx.fillStyle='#5e3a1a'; ctx.fillRect(fx-38,fy-74,76,8);
+  // fire
+  for(let i=0;i<7;i++){ const h=14+Math.sin(Game.time*10+i)*7; ctx.fillStyle=i%2?'#f2c14e':'#f2a23c';
+    ctx.fillRect(fx-18+i*5, fy-16-h, 4, h); ctx.fillStyle='#d8403c'; ctx.fillRect(fx-18+i*5, fy-8-h*0.5, 4, h*0.5);}
+  // stocking on mantel
+  ctx.fillStyle='#fff3df'; ctx.fillRect(fx+8,fy-72,14,4);
+  ctx.fillStyle='#a83232'; ctx.fillRect(fx+9,fy-68,12,12); ctx.fillRect(fx+9,fy-56,16,5);
+
+  // tree (right) with lit star + ornaments
+  const tx=300, ty=VIEW_H-32, treeTop=ty-122;
+  coneTree(ctx, tx, treeTop, ty, 64, '#2f7d43', '#2c6e3c');
+  ctx.fillStyle='#5e3a1a'; ctx.fillRect(tx-4, ty, 8, 8);
+  const tw=1+Math.sin(Game.time*6)*0.15;
+  ctx.save(); ctx.globalAlpha=0.4; star5(ctx,tx,treeTop,16*tw,'#ffe07a'); ctx.restore();
+  star5(ctx,tx,treeTop,11,'#f2c14e'); star5(ctx,tx,treeTop,7,'#ffe07a');
+  for(let i=0;i<16;i++){ const oy=treeTop+20+(i/16)*(ty-treeTop-26); const hw=treeHalfWidthAt(oy,treeTop,ty,64);
+    const on=Math.sin(Game.time*4+i)>0; ctx.fillStyle=on?['#d8403c','#f2c14e','#3f6fd0','#e58fae'][i%4]:'#314';
+    ctx.fillRect((tx+Math.sin(i*2.3)*hw)|0, oy|0, 3,3); }
+
+  // string of lights across the top, cycling
+  const cols=['#d8403c','#3fa45b','#f2c14e','#3f6fd0','#e58fae'];
+  ctx.strokeStyle='#244018'; ctx.beginPath();
+  for(let i=0;i<=24;i++){ const lx=i*(VIEW_W/24), ly=18+Math.sin(i*0.6)*6; i?ctx.lineTo(lx,ly):ctx.moveTo(lx,ly);} ctx.stroke();
+  for(let i=0;i<=24;i++){ const lx=i*(VIEW_W/24), ly=18+Math.sin(i*0.6)*6+5;
+    const on=Math.sin(Game.time*5+i*0.7)>-0.1; ctx.fillStyle=on?cols[i%cols.length]:'#333'; ctx.fillRect(lx-1,ly,3,4); }
+
+  // gingerbread cheering (hands-up hop) center
+  const hop=Math.abs(Math.sin(Game.time*3))*8;
+  ctx.drawImage(SPR.gb_jump_r, VIEW_W/2-16, VIEW_H-58-hop, 32,32);
+
+  drawScreenSnow();
+
+  // celebratory text
+  const pulse=12+Math.sin(Game.time*4)*1.5;
+  drawTextC('A perfect Christmas!', VIEW_W/2, 50, '#ffd76a', pulse);
+  drawTextC('You decorated the whole house.', VIEW_W/2, 72, '#fff3df', 8);
+  drawTextC('Treats collected: '+Game.treatsTotal+' / '+Game.treatsMax, VIEW_W/2, 86, '#bfe3ff', 8);
+  if(Game.cutTimer>1.2 && Math.floor(Game.time*2)%2===0) drawTextC('Press any key for the menu', VIEW_W/2, VIEW_H-14, '#bfe3ff', 9);
+}
+
+function drawPause(){
+  ctx.fillStyle='rgba(10,6,18,0.6)'; ctx.fillRect(0,0,VIEW_W,VIEW_H);
+  drawTextC('PAUSED', VIEW_W/2, 86, '#ffd76a', 20);
+  drawTextC('Press P or Esc to resume', VIEW_W/2, 116, '#fff3df', 8);
+  drawTextC('M to '+(AUDIO.muted?'unmute':'mute'), VIEW_W/2, 130, '#caa97e', 8);
+}
+
+function render(){
+  ctx.clearRect(0,0,VIEW_W,VIEW_H);
+  switch(Game.state){
+    case STATE.TITLE: drawTitle(); break;
+    case STATE.INTRO: drawIntro(); break;
+    case STATE.TRANSITION: drawTransition(); break;
+    case STATE.PLAYING:
+      drawWorld(Game.level);
+      if(Game.levelDone){
+        ctx.fillStyle='rgba(10,6,18,0.35)'; ctx.fillRect(0,0,VIEW_W,VIEW_H);
+        drawTextC('LEVEL COMPLETE!', VIEW_W/2, 92, '#ffd76a', 16);
+        const msg=['The star shines bright!','The stocking is hung!','The lights are glowing!'][Game.levelIndex];
+        drawTextC(msg, VIEW_W/2, 114, '#fff3df', 9);
+      }
+      if(Game.paused) drawPause();
+      break;
+    case STATE.CUTSCENE: drawCutscene(); break;
+  }
+}
+
+/* ===================== 10. MAIN LOOP ==================================== */
+let last=performance.now();
+function frame(now){
+  let dt=(now-last)/1000; last=now;
+  if(dt>0.05) dt=0.05;            // clamp big stalls (tab switches)
+  update(dt);
+  render();
+  requestAnimationFrame(frame);
+}
+
+/* page-background drifting snow (purely cosmetic, behind the frame) */
+(function pageSnow(){
+  const pc=document.getElementById('pageSnow'); const px2=pc.getContext('2d');
+  let flakes=[];
+  function resize(){ pc.width=window.innerWidth; pc.height=window.innerHeight;
+    flakes=[]; for(let i=0;i<90;i++) flakes.push({x:Math.random()*pc.width,y:Math.random()*pc.height,s:rnd(10,30),r:rnd(1,2.5)}); }
+  resize(); window.addEventListener('resize', resize);
+  (function loop(){ px2.clearRect(0,0,pc.width,pc.height); px2.fillStyle='#cfe9ff';
+    for(const f of flakes){ f.y+=f.s/60; f.x+=Math.sin(f.y*0.02)*0.3; if(f.y>pc.height){f.y=-4;f.x=Math.random()*pc.width;}
+      px2.globalAlpha=0.5; px2.fillRect(f.x,f.y,f.r,f.r);} px2.globalAlpha=1;
+    requestAnimationFrame(loop); })();
+})();
+
+_titleVisible = true;
+ControlMode._apply();   // show/hide mobile overlay based on default mode
+
+fitCanvas();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
